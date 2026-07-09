@@ -8,7 +8,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
-from app.api import auth, chat, crowd, dashboard, navigation, notifications, reports, sustainability, transport, translation
+from app.api import auth, chat, crowd, dashboard, navigation, notifications, reports, seed, sustainability, transport, translation
 from app.services.crowd_simulator import simulator
 
 logger = logging.getLogger(__name__)
@@ -47,6 +47,7 @@ app.include_router(dashboard.router, prefix=f"{settings.API_V1_STR}/dashboard", 
 app.include_router(navigation.router, prefix=f"{settings.API_V1_STR}/navigation", tags=["navigation"])
 app.include_router(notifications.router, prefix=f"{settings.API_V1_STR}/notifications", tags=["notifications"])
 app.include_router(reports.router, prefix=f"{settings.API_V1_STR}/reports", tags=["reports"])
+app.include_router(seed.router, prefix=f"{settings.API_V1_STR}/seed", tags=["seed"])
 app.include_router(sustainability.router, prefix=f"{settings.API_V1_STR}/sustainability", tags=["sustainability"])
 app.include_router(transport.router, prefix=f"{settings.API_V1_STR}/transport", tags=["transport"])
 app.include_router(translation.router, prefix=f"{settings.API_V1_STR}/translation", tags=["translation"])

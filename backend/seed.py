@@ -19,7 +19,9 @@ def seed():
     try:
         if db.query(User).first():
             print("Database already seeded — skipping.")
-            return
+            return {"message": "Database already seeded"}
+
+        result = {}
 
         # --- Users ---
         admin = User(
@@ -47,6 +49,7 @@ def seed():
             is_active=True,
         )
         db.add_all([admin, fan, staff])
+        result["users"] = 3
 
         # --- Stadiums (FIFA World Cup 2026 host stadiums) ---
         stadiums_data = [
@@ -74,6 +77,7 @@ def seed():
             )
             stadiums.append(stadium)
         db.add_all(stadiums)
+        result["stadiums"] = len(stadiums_data)
 
         # --- Matches ---
         match_dates = [
@@ -282,6 +286,19 @@ def seed():
         db.add_all(sustainability_entries)
 
         db.commit()
+        result.update({
+            "message": "Database seeded successfully",
+            "stadiums": len(stadiums_data),
+            "matches": len(matches_data),
+            "crowd_data_points": len(crowd_records),
+            "routes": len(route_entries),
+            "volunteers": len(volunteers),
+            "incidents": len(incidents),
+            "notifications": len(notifications),
+            "transport_options": len(transport_entries),
+            "parking_lots": len(parking_entries),
+            "sustainability_logs": len(sustainability_entries),
+        })
         print(f"Database seeded successfully!")
         print(f"  - {len(stadiums_data)} stadiums")
         print(f"  - {len(matches_data)} matches")
@@ -293,6 +310,7 @@ def seed():
         print(f"  - {len(transport_entries)} transport options")
         print(f"  - {len(parking_entries)} parking lots")
         print(f"  - {len(sustainability_entries)} sustainability logs")
+        return result
 
     finally:
         db.close()
