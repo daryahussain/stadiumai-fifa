@@ -19,13 +19,16 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> List[str]:
         v = self.BACKEND_CORS_ORIGINS.strip().strip("'\"")
+        if v == "*":
+            return ["*"]
         try:
             parsed = json.loads(v)
             if isinstance(parsed, list):
                 return parsed
         except json.JSONDecodeError:
             pass
-        return [origin.strip() for origin in v.split(",") if origin.strip()]
+        result = [origin.strip() for origin in v.split(",") if origin.strip()]
+        return result if result else ["*"]
 
     DATABASE_URL: str = "sqlite:///./stadiumai.db"
 
@@ -45,7 +48,6 @@ class Settings(BaseSettings):
     LIMITER: Limiter = Limiter(key_func=get_remote_address)
 
     class Config:
-        env_file = ".env"
         case_sensitive = True
 
 
