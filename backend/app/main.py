@@ -1,3 +1,5 @@
+import logging
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -9,9 +11,12 @@ from app.core.config import settings
 from app.api import auth, chat, crowd, dashboard, navigation, notifications, reports, sustainability, transport, translation
 from app.services.crowd_simulator import simulator
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info(f"CORS origins: {settings.BACKEND_CORS_ORIGINS}")
     await simulator.start()
     yield
     await simulator.stop()
@@ -59,6 +64,16 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+
+@app.get("/config")
+async def config():
+    return {
+        "cors_origins": settings.BACKEND_CORS_ORIGINS,
+        "database_url": settings.DATABASE_URL.replace(settings.DATABASE_URL.split("@")[-1], "***") if "@" in settings.DATABASE_URL else "sqlite",
+        "project": settings.PROJECT_NAME,
+        "version": settings.VERSION,
+    }
 
 
 @app.websocket("/ws/crowd")

@@ -1,10 +1,13 @@
 import json
+import logging
 from typing import List
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -18,7 +21,14 @@ class Settings(BaseSettings):
     @classmethod
     def parse_cors_origins(cls, v):
         if isinstance(v, str):
-            return json.loads(v)
+            v = v.strip().strip("'\"")
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except json.JSONDecodeError:
+                pass
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
     DATABASE_URL: str = "sqlite:///./stadiumai.db"
