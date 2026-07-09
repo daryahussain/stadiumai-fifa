@@ -1,0 +1,15 @@
+node_modules/
+.next/
+*.pyc
+__pycache__/
+*.egg-info/
+dist/
+.env
+.venv/
+venv/
+*.log
+.DS_Store
+
+# Docker
+.docker/
+*.db
