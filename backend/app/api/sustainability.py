@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.models.sustainability_log import SustainabilityLog
 from app.models.ai_report import AIReport
 from app.schemas.sustainability import SustainabilityResponse, Metric
+from app.data import fifa2026
 
 router = APIRouter()
 
@@ -21,24 +22,24 @@ METRIC_LABELS = {
 
 @router.get("/")
 async def get_sustainability(db: Session = Depends(get_db)):
-    latest_per_metric = (
-        db.query(
-            SustainabilityLog.metric_type,
-            func.max(SustainabilityLog.timestamp).label("max_ts"),
-        )
-        .group_by(SustainabilityLog.metric_type)
-        .subquery()
-    )
+    logs = db.query(SustainabilityLog).all()
 
-    logs = (
-        db.query(SustainabilityLog)
-        .join(
-            latest_per_metric,
-            (SustainabilityLog.metric_type == latest_per_metric.c.metric_type)
-            & (SustainabilityLog.timestamp == latest_per_metric.c.max_ts),
+    if not logs:
+        return SustainabilityResponse(
+            metrics=[
+                Metric(
+                    label=METRIC_LABELS.get(s["metric"], s["metric"].replace("_", " ").title()),
+                    value=str(s["value"]),
+                    unit=s["unit"],
+                    change="0%",
+                    trend="neutral",
+                )
+                for s in fifa2026.SUSTAINABILITY_LOGS
+            ],
+            ai_recommendation="All sustainability metrics are within normal range. "
+                              "The FIFA 2026 tournament is committed to net-zero carbon emissions. "
+                              "Solar panels across host stadiums generated 8.2 MWh today.",
         )
-        .all()
-    )
 
     latest_report = db.query(AIReport).filter(AIReport.report_type == "sustainability").order_by(AIReport.generated_at.desc()).first()
 

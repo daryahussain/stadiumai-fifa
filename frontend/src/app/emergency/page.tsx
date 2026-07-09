@@ -2,7 +2,9 @@
 
 import { useState, FormEvent } from "react"
 import { Header } from "@/components/layout/Header"
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { reportIncident } from "@/lib/incidents"
+import { useAuthStore } from "@/store/auth"
 import { Loader2, Shield, AlertTriangle, CheckCircle } from "lucide-react"
 
 const INCIDENT_TYPES = [
@@ -22,13 +24,14 @@ export default function EmergencyPage() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<{ id: string; ai_response: string } | null>(null)
   const [error, setError] = useState("")
+  const { token } = useAuthStore()
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError("")
     setLoading(true)
     try {
-      const data = await reportIncident({ incident_type: type, description, location, severity })
+      const data = await reportIncident({ incident_type: type, description, location, severity }, token || undefined)
       setResult(data)
     } catch (e) {
       setError((e as Error).message)
@@ -39,6 +42,7 @@ export default function EmergencyPage() {
 
   if (result) {
     return (
+      <ProtectedRoute>
       <div className="min-h-screen flex flex-col">
         <Header />
         <main className="flex-1 flex items-center justify-center px-4">
@@ -55,10 +59,12 @@ export default function EmergencyPage() {
           </div>
         </main>
       </div>
+      </ProtectedRoute>
     )
   }
 
   return (
+    <ProtectedRoute>
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1 max-w-2xl mx-auto px-4 py-8 w-full">
@@ -114,5 +120,6 @@ export default function EmergencyPage() {
         </div>
       </main>
     </div>
+    </ProtectedRoute>
   )
 }

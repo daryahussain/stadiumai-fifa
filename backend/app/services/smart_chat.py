@@ -1,18 +1,12 @@
 import re
 from collections import deque
 from dataclasses import dataclass, field
+from datetime import datetime as dt
 from enum import Enum
+from types import SimpleNamespace
 from typing import Optional
 
-from sqlalchemy.orm import Session
-
-from app.models.stadium import Stadium
-from app.models.match import Match
-from app.models.crowd_data import CrowdData
-from app.models.route import Route
-from app.models.transport_option import TransportOption, ParkingLot
-from app.models.sustainability_log import SustainabilityLog
-from app.models.volunteer import Volunteer
+from app.data import fifa2026
 
 
 class IntentType(str, Enum):
@@ -231,71 +225,88 @@ class IntentClassifier:
 
 
 class DataRetriever:
-    def __init__(self, db: Session):
-        self.db = db
+    def _make_stadium(self, s: dict) -> SimpleNamespace:
+        cap = s["capacity"]
+        return SimpleNamespace(id=s["id"], name=s["name"], city=s["city"], capacity=cap)
 
-    def get_stadiums(self) -> list[Stadium]:
-        return self.db.query(Stadium).order_by(Stadium.name).all()
+    def _make_match(self, m: dict) -> SimpleNamespace:
+        return SimpleNamespace(
+            id=m["id"], home_team=m["home"], away_team=m["away"],
+            match_date=dt.strptime(m["date"], "%Y-%m-%d"),
+            status=m.get("status", "scheduled"),
+            sold_tickets=int(sum(s["capacity"] for s in fifa2026.STADIUMS) / len(fifa2026.MATCHES)),
+            total_tickets=sum(s["capacity"] for s in fifa2026.STADIUMS),
+        )
 
-    def get_stadium_by_name(self, name: str) -> Optional[Stadium]:
-        return self.db.query(Stadium).filter(Stadium.name.ilike(f"%{name}%")).first()
+    def _make_crowd(self, zone: str) -> SimpleNamespace:
+        h = hash(zone)
+        return SimpleNamespace(
+            zone=zone,
+            density=round(0.2 + 0.6 * (h % 100) / 100, 2),
+            wait_time=5 + (h % 30),
+        )
 
-    def get_first_stadium(self) -> Optional[Stadium]:
-        return self.db.query(Stadium).order_by(Stadium.name).first()
+    def _make_route(self, r: dict) -> SimpleNamespace:
+        return SimpleNamespace(
+            start_location=r["start"], end_location=r["end"],
+            distance_km=r["dist"], wheelchair_accessible=r["wc"],
+        )
 
-    def get_matches(self, limit: int = 5) -> list[Match]:
-        from sqlalchemy import asc
-        return self.db.query(Match).order_by(asc(Match.match_date)).limit(limit).all()
+    def _make_parking(self, p: dict) -> SimpleNamespace:
+        return SimpleNamespace(
+            lot=p["lot"], available_spots=p["available"],
+            total_spots=p["total"], distance_m=p["dist"], status=p["status"],
+        )
 
-    def get_matches_by_team(self, team: str, limit: int = 3) -> list[Match]:
-        return self.db.query(Match).filter(
-            (Match.home_team.ilike(f"%{team}%")) | (Match.away_team.ilike(f"%{team}%"))
-        ).limit(limit).all()
+    def _make_transport(self, t: dict) -> SimpleNamespace:
+        return SimpleNamespace(
+            name=t["name"], type=t["type"], status=t["status"],
+            next_arrival=t["next"],
+        )
 
-    def get_crowd_data(self, stadium_id, limit: int = 20) -> list[CrowdData]:
-        from sqlalchemy import desc
-        latest = self.db.query(CrowdData.timestamp).filter(
-            CrowdData.stadium_id == stadium_id
-        ).order_by(desc(CrowdData.timestamp)).first()
-        if not latest:
-            return []
-        return self.db.query(CrowdData).filter(
-            CrowdData.stadium_id == stadium_id,
-            CrowdData.timestamp == latest[0],
-        ).limit(limit).all()
+    def _make_sustainability(self, s: dict) -> SimpleNamespace:
+        return SimpleNamespace(metric_type=s["metric"], value=s["value"], unit=s["unit"])
 
-    def get_routes(self, stadium_id, limit: int = 10) -> list[Route]:
-        return self.db.query(Route).filter(
-            Route.stadium_id == stadium_id
-        ).limit(limit).all()
+    def get_stadiums(self) -> list:
+        return [self._make_stadium(s) for s in fifa2026.STADIUMS]
 
-    def get_transport_options(self, stadium_id) -> list[TransportOption]:
-        return self.db.query(TransportOption).filter(
-            TransportOption.stadium_id == stadium_id
-        ).all()
+    def get_stadium_by_name(self, name: str) -> Optional[SimpleNamespace]:
+        nl = name.lower()
+        for s in fifa2026.STADIUMS:
+            if nl in s["name"].lower() or nl in s["city"].lower():
+                return self._make_stadium(s)
+        return None
 
-    def get_parking_lots(self, stadium_id) -> list[ParkingLot]:
-        return self.db.query(ParkingLot).filter(
-            ParkingLot.stadium_id == stadium_id
-        ).all()
+    def get_first_stadium(self) -> SimpleNamespace:
+        return self._make_stadium(fifa2026.STADIUMS[0])
 
-    def get_sustainability_logs(self, stadium_id) -> list[SustainabilityLog]:
-        from sqlalchemy import desc
-        logs = []
-        for row in self.db.query(SustainabilityLog.metric_type).filter(
-            SustainabilityLog.stadium_id == stadium_id
-        ).distinct().all():
-            metric = row[0]
-            log = self.db.query(SustainabilityLog).filter(
-                SustainabilityLog.stadium_id == stadium_id,
-                SustainabilityLog.metric_type == metric,
-            ).order_by(desc(SustainabilityLog.timestamp)).first()
-            if log:
-                logs.append(log)
-        return logs
+    def get_matches(self, limit: int = 5) -> list:
+        matches = sorted(fifa2026.MATCHES, key=lambda m: m["date"])
+        return [self._make_match(m) for m in matches[:limit]]
 
-    def get_volunteers(self) -> list[Volunteer]:
-        return self.db.query(Volunteer).filter(Volunteer.is_active == True).all()
+    def get_matches_by_team(self, team: str, limit: int = 3) -> list:
+        tl = team.lower()
+        filtered = [m for m in fifa2026.MATCHES if tl in m["home"].lower() or tl in m["away"].lower()]
+        return [self._make_match(m) for m in filtered[:limit]]
+
+    def get_crowd_data(self, stadium_id=None, limit: int = 20) -> list:
+        zones = fifa2026.ZONES[:limit]
+        return [self._make_crowd(z) for z in zones]
+
+    def get_routes(self, stadium_id=None, limit: int = 10) -> list:
+        return [self._make_route(r) for r in fifa2026.ROUTES[:limit]]
+
+    def get_transport_options(self, stadium_id=None) -> list:
+        return [self._make_transport(t) for t in fifa2026.TRANSPORT_OPTIONS]
+
+    def get_parking_lots(self, stadium_id=None) -> list:
+        return [self._make_parking(p) for p in fifa2026.PARKING_LOTS]
+
+    def get_sustainability_logs(self, stadium_id=None) -> list:
+        return [self._make_sustainability(s) for s in fifa2026.SUSTAINABILITY_LOGS]
+
+    def get_volunteers(self) -> list:
+        return [SimpleNamespace(is_active=True, zone=v["zone"], role=v["role"]) for v in fifa2026.VOLUNTEER_ZONES]
 
 
 class ResponseGenerator:
@@ -534,21 +545,20 @@ class ResponseGenerator:
         )
 
 
-def get_stadium_id(db: Session, stadium_name: str = None) -> Optional[str]:
+def get_stadium_id(stadium_name: str = None) -> Optional[str]:
     if stadium_name:
-        stadium = db.query(Stadium).filter(Stadium.name.ilike(f"%{stadium_name}%")).first()
-        if stadium:
-            return str(stadium.id)
-    stadium = db.query(Stadium).order_by(Stadium.name).first()
-    return str(stadium.id) if stadium else None
+        nl = stadium_name.lower()
+        for s in fifa2026.STADIUMS:
+            if nl in s["name"].lower() or nl in s["city"].lower():
+                return s["id"]
+    return fifa2026.STADIUMS[0]["id"]
 
 
 class SmartChatEngine:
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, db=None):
         self.context = ConversationContext()
         self.classifier = IntentClassifier(self.context)
-        self.retriever = DataRetriever(db)
+        self.retriever = DataRetriever()
         self.generator = ResponseGenerator()
 
     async def get_response(self, message: str, history: list[dict]) -> str:
@@ -574,8 +584,8 @@ class SmartChatEngine:
 
         if primary == IntentType.NAVIGATION:
             stadium_name = entities.get("stadium")
-            sid = get_stadium_id(self.db, stadium_name)
-            routes = self.retriever.get_routes(sid) if sid else []
+            sid = get_stadium_id(stadium_name)
+            routes = self.retriever.get_routes(sid)
             zone = entities.get("zone", "")
             return self.generator.navigation(zone, routes)
 
@@ -587,14 +597,14 @@ class SmartChatEngine:
 
         if primary == IntentType.PARKING:
             stadium_name = entities.get("stadium")
-            sid = get_stadium_id(self.db, stadium_name)
-            lots = self.retriever.get_parking_lots(sid) if sid else []
+            sid = get_stadium_id(stadium_name)
+            lots = self.retriever.get_parking_lots(sid)
             return self.generator.parking(lots)
 
         if primary == IntentType.TRANSPORT:
             stadium_name = entities.get("stadium")
-            sid = get_stadium_id(self.db, stadium_name)
-            options = self.retriever.get_transport_options(sid) if sid else []
+            sid = get_stadium_id(stadium_name)
+            options = self.retriever.get_transport_options(sid)
             return self.generator.transport(options)
 
         if primary == IntentType.MATCH_SCHEDULE or primary == IntentType.MATCH_INFO:
@@ -609,8 +619,8 @@ class SmartChatEngine:
 
         if primary == IntentType.CROWD:
             stadium_name = entities.get("stadium")
-            sid = get_stadium_id(self.db, stadium_name)
-            crowd_data = self.retriever.get_crowd_data(sid) if sid else []
+            sid = get_stadium_id(stadium_name)
+            crowd_data = self.retriever.get_crowd_data(sid)
             return self.generator.crowd(crowd_data)
 
         if primary == IntentType.EMERGENCY:
@@ -621,8 +631,8 @@ class SmartChatEngine:
 
         if primary == IntentType.SUSTAINABILITY:
             stadium_name = entities.get("stadium")
-            sid = get_stadium_id(self.db, stadium_name)
-            logs = self.retriever.get_sustainability_logs(sid) if sid else []
+            sid = get_stadium_id(stadium_name)
+            logs = self.retriever.get_sustainability_logs(sid)
             return self.generator.sustainability(logs)
 
         if primary == IntentType.STADIUM_INFO or primary == IntentType.CAPACITY:

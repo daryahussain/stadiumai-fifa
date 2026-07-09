@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Header } from "@/components/layout/Header"
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
 import { StatCard } from "@/components/dashboard/StatCard"
 import { MatchSchedule } from "@/components/dashboard/MatchSchedule"
 import { AlertsPanel } from "@/components/dashboard/AlertsPanel"
@@ -47,6 +48,7 @@ export default function DashboardPage() {
   }, [token])
 
   return (
+    <ProtectedRoute>
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1 max-w-6xl mx-auto px-4 py-8 w-full">
@@ -83,5 +85,6 @@ export default function DashboardPage() {
         )}
       </main>
     </div>
+    </ProtectedRoute>
   )
 }

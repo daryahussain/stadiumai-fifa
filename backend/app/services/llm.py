@@ -73,11 +73,8 @@ async def stream_llm_response(message: str, history: list[dict], db: Session = N
 
 
 async def get_smart_fallback(message: str, history: list[dict], db: Session = None) -> str:
-    if db is None:
-        return _get_basic_fallback(message)
-
     from app.services.smart_chat import SmartChatEngine
-    engine = SmartChatEngine(db)
+    engine = SmartChatEngine()
     try:
         return await engine.get_response(message, history)
     except Exception:

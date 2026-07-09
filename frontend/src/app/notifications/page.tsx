@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { Header } from "@/components/layout/Header"
-import { getNotifications } from "@/lib/notifications"
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute"
+import { getNotifications, markNotificationRead } from "@/lib/notifications"
 import { Loader2, Bell, AlertTriangle, Cloud, Bus, Info, Calendar } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -18,9 +19,15 @@ export default function NotificationsPage() {
     getNotifications().then((d) => setNotifications(d.notifications)).catch(console.error).finally(() => setLoading(false))
   }, [])
 
+  const handleMarkRead = async (id: string) => {
+    await markNotificationRead(id).catch(() => {})
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)))
+  }
+
   const unread = notifications.filter((n) => !n.is_read).length
 
   return (
+    <ProtectedRoute>
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1 max-w-3xl mx-auto px-4 py-8 w-full">
@@ -43,8 +50,8 @@ export default function NotificationsPage() {
             {notifications.map((n) => {
               const Icon = typeIcons[n.notification_type] || Bell
               return (
-                <div key={n.id} className={cn(
-                  "flex items-start gap-3 p-4 rounded-xl border transition-colors",
+                <div key={n.id} onClick={() => !n.is_read && handleMarkRead(n.id)} className={cn(
+                  "flex items-start gap-3 p-4 rounded-xl border transition-colors cursor-pointer",
                   n.is_read ? "border-border" : "border-primary/20 bg-primary/5"
                 )}>
                   <Icon className={cn("w-5 h-5 mt-0.5 flex-shrink-0", n.is_read ? "text-muted-foreground" : "text-primary")} />
@@ -62,5 +69,6 @@ export default function NotificationsPage() {
         )}
       </main>
     </div>
+    </ProtectedRoute>
   )
 }

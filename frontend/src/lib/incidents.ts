@@ -5,10 +5,12 @@ export async function reportIncident(data: {
   description: string
   location: string
   severity: number
-}) {
+}, token?: string) {
+  const headers: Record<string, string> = { "Content-Type": "application/json" }
+  if (token) headers["Authorization"] = `Bearer ${token}`
   const res = await fetch(`${API_BASE}/reports/incidents`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(data),
   })
   if (!res.ok) {

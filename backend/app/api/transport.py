@@ -3,33 +3,40 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.models.transport_option import TransportOption, ParkingLot
-from app.models.ai_report import AIReport
-from app.schemas.transport import TransportResponse, TransportOption as TransportOptionSchema, ParkingInfo
+from app.schemas.transport import TransportResponse, TransportOption, ParkingInfo
+from app.data import fifa2026
 
 router = APIRouter()
 
 
 @router.get("/")
 async def get_transport(db: Session = Depends(get_db)):
-    options = db.query(TransportOption).limit(10).all()
-    parking = db.query(ParkingLot).limit(10).all()
+    transport_records = db.query(TransportOption).all()
+    parking_records = db.query(ParkingLot).all()
 
-    latest_report = db.query(AIReport).filter(AIReport.report_type == "transport").order_by(AIReport.generated_at.desc()).first()
+    if not transport_records and not parking_records:
+        return TransportResponse(
+            options=[
+                TransportOption(name=t["name"], type=t["type"], status=t["status"], next_arrival=t["next"], wait_minutes=t["wait"])
+                for t in fifa2026.TRANSPORT_OPTIONS
+            ],
+            parking=[
+                ParkingInfo(lot=p["lot"], available_spots=p["available"], total_spots=p["total"],
+                            distance_m=p["dist"], status=p["status"])
+                for p in fifa2026.PARKING_LOTS
+            ],
+            ai_recommendation="Stadium Express Metro is running on schedule. Shuttle Bus 202 is experiencing minor delays. Parking Lots A and B have available spaces.",
+        )
 
     return TransportResponse(
         options=[
-            TransportOptionSchema(
-                type=o.type, name=o.name, status=o.status,
-                next_arrival=o.next_arrival, wait_minutes=o.wait_minutes,
-            )
-            for o in options
+            TransportOption(name=t.name, type=t.type, status=t.status, next_arrival=t.next_arrival, wait_minutes=t.wait_minutes)
+            for t in transport_records
         ],
         parking=[
-            ParkingInfo(
-                lot=p.lot, available_spots=p.available_spots,
-                total_spots=p.total_spots, distance_m=p.distance_m, status=p.status,
-            )
-            for p in parking
+            ParkingInfo(lot=p.lot, available_spots=p.available_spots, total_spots=p.total_spots,
+                        distance_m=p.distance_m, status=p.status)
+            for p in parking_records
         ],
-        ai_recommendation=latest_report.summary if latest_report else "All transport options are operating normally.",
+        ai_recommendation="All transport options are operating normally.",
     )
