@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info(f"CORS origins: {settings.BACKEND_CORS_ORIGINS}")
+    logger.info(f"CORS origins: {settings.cors_origins}")
     await simulator.start()
     yield
     await simulator.stop()
@@ -34,7 +34,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -69,7 +69,7 @@ async def health():
 @app.get("/config")
 async def config():
     return {
-        "cors_origins": settings.BACKEND_CORS_ORIGINS,
+        "cors_origins": settings.cors_origins,
         "database_url": settings.DATABASE_URL.replace(settings.DATABASE_URL.split("@")[-1], "***") if "@" in settings.DATABASE_URL else "sqlite",
         "project": settings.PROJECT_NAME,
         "version": settings.VERSION,
