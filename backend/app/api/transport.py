@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models.transport_option import TransportOption, ParkingLot
-from app.schemas.transport import TransportResponse, TransportOption, ParkingInfo
+from app.models.transport_option import TransportOption as TransportModel, ParkingLot
+from app.schemas.transport import TransportResponse, TransportOption as TransportSchema, ParkingInfo
 from app.data import fifa2026
 
 router = APIRouter()
@@ -11,13 +11,13 @@ router = APIRouter()
 
 @router.get("/")
 async def get_transport(db: Session = Depends(get_db)):
-    transport_records = db.query(TransportOption).all()
+    transport_records = db.query(TransportModel).all()
     parking_records = db.query(ParkingLot).all()
 
     if not transport_records and not parking_records:
         return TransportResponse(
             options=[
-                TransportOption(name=t["name"], type=t["type"], status=t["status"], next_arrival=t["next"], wait_minutes=t["wait"])
+                TransportSchema(name=t["name"], type=t["type"], status=t["status"], next_arrival=t["next"], wait_minutes=t["wait"])
                 for t in fifa2026.TRANSPORT_OPTIONS
             ],
             parking=[
@@ -30,7 +30,7 @@ async def get_transport(db: Session = Depends(get_db)):
 
     return TransportResponse(
         options=[
-            TransportOption(name=t.name, type=t.type, status=t.status, next_arrival=t.next_arrival, wait_minutes=t.wait_minutes)
+            TransportSchema(name=t.name, type=t.type, status=t.status, next_arrival=t.next_arrival, wait_minutes=t.wait_minutes)
             for t in transport_records
         ],
         parking=[

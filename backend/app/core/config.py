@@ -1,8 +1,9 @@
 import json
 import logging
+from functools import cached_property
 from typing import List
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
@@ -16,7 +17,7 @@ class Settings(BaseSettings):
 
     BACKEND_CORS_ORIGINS: str = '["http://localhost:3000"]'
 
-    @property
+    @cached_property
     def cors_origins(self) -> List[str]:
         v = self.BACKEND_CORS_ORIGINS.strip().strip("'\"")
         if v == "*":
@@ -45,10 +46,11 @@ class Settings(BaseSettings):
 
     REDIS_URL: str = "redis://localhost:6379"
 
-    LIMITER: Limiter = Limiter(key_func=get_remote_address)
+    @cached_property
+    def limiter(self) -> Limiter:
+        return Limiter(key_func=get_remote_address)
 
-    class Config:
-        case_sensitive = True
+    model_config = SettingsConfigDict(case_sensitive=True)
 
 
 settings = Settings()

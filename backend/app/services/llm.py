@@ -4,18 +4,17 @@ from typing import AsyncGenerator
 
 from sqlalchemy.orm import Session
 
-STADIUM_CONTEXT = """
-You are StadiumAI, an AI assistant for the FIFA World Cup 2026.
-You help fans with:
-- Stadium navigation and seat guidance
-- Food and restroom recommendations
-- Match schedules and event information
-- Transportation and parking
-- Emergency assistance
-- General FAQs about the venue
+STADIUM_CONTEXT = """You are StadiumAI, an AI assistant for the FIFA World Cup 2026.
+You help fans with: stadium navigation, seat guidance, food, restrooms, match schedules, transportation, parking, emergency assistance, and general FAQs.
+Be concise, friendly, and helpful."""
 
-Be concise, friendly, and helpful. Use the stadium context to answer questions.
-"""
+
+def _build_messages(message: str, history: list[dict]) -> list[dict]:
+    messages = [{"role": "system", "content": STADIUM_CONTEXT}]
+    for h in history[-10:]:
+        messages.append({"role": h["role"], "content": h["content"]})
+    messages.append({"role": "user", "content": message})
+    return messages
 
 
 async def get_llm_response(message: str, history: list[dict], db: Session = None) -> str:
@@ -25,13 +24,9 @@ async def get_llm_response(message: str, history: list[dict], db: Session = None
         try:
             from openai import AsyncOpenAI
             client = AsyncOpenAI(api_key=api_key)
-            messages = [{"role": "system", "content": STADIUM_CONTEXT}]
-            for h in history[-10:]:
-                messages.append({"role": h["role"], "content": h["content"]})
-            messages.append({"role": "user", "content": message})
             response = await client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=messages,
+                messages=_build_messages(message, history),
                 temperature=0.7,
                 max_tokens=500,
             )
@@ -49,13 +44,9 @@ async def stream_llm_response(message: str, history: list[dict], db: Session = N
         try:
             from openai import AsyncOpenAI
             client = AsyncOpenAI(api_key=api_key)
-            messages = [{"role": "system", "content": STADIUM_CONTEXT}]
-            for h in history[-10:]:
-                messages.append({"role": h["role"], "content": h["content"]})
-            messages.append({"role": "user", "content": message})
             stream = await client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=messages,
+                messages=_build_messages(message, history),
                 temperature=0.7,
                 max_tokens=500,
                 stream=True,

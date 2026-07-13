@@ -21,6 +21,16 @@ ZONES = [
 ]
 
 
+def _status_label(density_pct: float) -> str:
+    if density_pct >= 80:
+        return "congested"
+    if density_pct >= 60:
+        return "busy"
+    if density_pct >= 40:
+        return "moderate"
+    return "clear"
+
+
 class CrowdSimulator:
     def __init__(self):
         self._task: asyncio.Task | None = None
@@ -75,19 +85,9 @@ class CrowdSimulator:
             for stadium in stadiums:
                 for zone in ZONES:
                     base = random.uniform(0.2, 0.8)
-                    variation = random.uniform(-0.15, 0.15)
-                    density = round(max(0.05, min(1.0, base + variation)), 2)
+                    density = round(max(0.05, min(1.0, base + random.uniform(-0.15, 0.15))), 2)
                     wait = max(1, int(density * 30 + random.randint(-5, 5)))
-
-                    record = CrowdData(
-                        id=uuid4(),
-                        stadium_id=stadium.id,
-                        zone=zone,
-                        density=density,
-                        wait_time=wait,
-                        timestamp=now,
-                    )
-                    records.append(record)
+                    records.append(CrowdData(id=uuid4(), stadium_id=stadium.id, zone=zone, density=density, wait_time=wait, timestamp=now))
 
             db.add_all(records)
             db.commit()
@@ -104,40 +104,22 @@ class CrowdSimulator:
                 latest_per_zone[r.zone] = r
 
         total_capacity = sum(s.capacity for s in stadiums)
-        zones = []
-        for r in latest_per_zone.values():
-            density_pct = round(r.density * 100, 1)
-            if density_pct >= 80:
-                status = "congested"
-            elif density_pct >= 60:
-                status = "busy"
-            elif density_pct >= 40:
-                status = "moderate"
-            else:
-                status = "clear"
-
-            zones.append({
-                "zone": r.zone,
-                "density": density_pct,
-                "status": status,
-                "wait_time": r.wait_time or 0,
-            })
-
+        zones = [
+            {"zone": r.zone, "density": round(r.density * 100, 1), "status": _status_label(r.density * 100), "wait_time": r.wait_time or 0}
+            for r in latest_per_zone.values()
+        ]
         avg_density = round(sum(z["density"] for z in zones) / len(zones), 1) if zones else 0
         total_occupancy = int(total_capacity * avg_density / 100) if total_capacity else 0
 
         queues = [
-            {"location": z["zone"], "type": "entry", "wait_minutes": z["wait_time"],
-             "trend": random.choice(["rising", "falling", "stable"])}
+            {"location": z["zone"], "type": "entry", "wait_minutes": z["wait_time"], "trend": random.choice(["rising", "falling", "stable"])}
             for z in zones[:5]
         ]
 
         return {
             "overview": {
-                "total_occupancy": total_occupancy,
-                "total_capacity": total_capacity,
-                "avg_density": avg_density,
-                "congestion_level": "congested" if avg_density >= 80 else "busy" if avg_density >= 60 else "moderate" if avg_density >= 40 else "clear",
+                "total_occupancy": total_occupancy, "total_capacity": total_capacity,
+                "avg_density": avg_density, "congestion_level": _status_label(avg_density),
             },
             "zones": zones,
             "queues": queues,

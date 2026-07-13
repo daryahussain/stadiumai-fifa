@@ -39,7 +39,7 @@ async def get_notifications(db: Session = Depends(get_db)):
             unread_count=len(FALLBACK_NOTIFICATIONS),
         )
 
-    unread = db.query(Notification).filter(Notification.is_read == False).count()  # noqa: E712
+    unread = db.query(Notification).filter(Notification.is_read.is_(False)).count()
 
     return NotificationListResponse(
         notifications=[

@@ -14,6 +14,21 @@ from app.services.crowd_simulator import simulator
 logger = logging.getLogger(__name__)
 
 
+_ROUTERS = [
+    (auth.router, "auth"),
+    (chat.router, "chat"),
+    (crowd.router, "crowd"),
+    (dashboard.router, "dashboard"),
+    (navigation.router, "navigation"),
+    (notifications.router, "notifications"),
+    (reports.router, "reports"),
+    (seed.router, "seed"),
+    (sustainability.router, "sustainability"),
+    (transport.router, "transport"),
+    (translation.router, "translation"),
+]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"CORS origins: {settings.cors_origins}")
@@ -29,7 +44,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.state.limiter = settings.LIMITER
+app.state.limiter = settings.limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
@@ -40,17 +55,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
-app.include_router(chat.router, prefix=f"{settings.API_V1_STR}/chat", tags=["chat"])
-app.include_router(crowd.router, prefix=f"{settings.API_V1_STR}/crowd", tags=["crowd"])
-app.include_router(dashboard.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["dashboard"])
-app.include_router(navigation.router, prefix=f"{settings.API_V1_STR}/navigation", tags=["navigation"])
-app.include_router(notifications.router, prefix=f"{settings.API_V1_STR}/notifications", tags=["notifications"])
-app.include_router(reports.router, prefix=f"{settings.API_V1_STR}/reports", tags=["reports"])
-app.include_router(seed.router, prefix=f"{settings.API_V1_STR}/seed", tags=["seed"])
-app.include_router(sustainability.router, prefix=f"{settings.API_V1_STR}/sustainability", tags=["sustainability"])
-app.include_router(transport.router, prefix=f"{settings.API_V1_STR}/transport", tags=["transport"])
-app.include_router(translation.router, prefix=f"{settings.API_V1_STR}/translation", tags=["translation"])
+for router, tag in _ROUTERS:
+    app.include_router(router, prefix=f"{settings.API_V1_STR}/{tag}", tags=[tag])
 
 
 @app.get("/")

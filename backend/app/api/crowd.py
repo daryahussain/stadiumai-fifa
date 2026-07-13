@@ -1,5 +1,8 @@
+import random
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.core.database import get_db
 from app.models.crowd_data import CrowdData
@@ -22,7 +25,6 @@ def _status_label(density: float) -> str:
 
 
 def _build_fallback_crowd() -> CrowdResponse:
-    import random
     zones = []
     for z in fifa2026.ZONES:
         density = round(random.uniform(15, 85), 1)
@@ -54,25 +56,21 @@ def _build_fallback_crowd() -> CrowdResponse:
 @router.get("/")
 async def get_crowd_data(db: Session = Depends(get_db)):
     records = db.query(CrowdData).order_by(CrowdData.timestamp.desc()).limit(50).all()
-    stadiums = db.query(Stadium).all()
+    total_capacity = db.query(func.sum(Stadium.capacity)).scalar() or 0
 
-    if not records and not stadiums:
-        return _build_fallback_crowd()
+    if not records:
+        return _build_fallback_crowd() if not total_capacity else CrowdResponse(
+            overview=CrowdOverview(total_occupancy=0, total_capacity=total_capacity, avg_density=0.0, congestion_level="clear"),
+            zones=[], queues=[], ai_summary="No crowd data available yet.",
+        )
 
-    total_capacity = sum(s.capacity for s in stadiums) if stadiums else sum(s["capacity"] for s in fifa2026.STADIUMS)
-
-    latest_per_zone = {}
+    latest_per_zone: dict[str, CrowdData] = {}
     for r in records:
         if r.zone not in latest_per_zone:
             latest_per_zone[r.zone] = r
 
     zones = [
-        ZoneDensity(
-            zone=r.zone,
-            density=round(r.density * 100, 1),
-            status=_status_label(r.density),
-            wait_time=r.wait_time or 0,
-        )
+        ZoneDensity(zone=r.zone, density=round(r.density * 100, 1), status=_status_label(r.density), wait_time=r.wait_time or 0)
         for r in latest_per_zone.values()
     ]
     avg_density = round(sum(z.density for z in zones) / len(zones), 1) if zones else 0.0
@@ -81,16 +79,8 @@ async def get_crowd_data(db: Session = Depends(get_db)):
     latest_report = db.query(AIReport).filter(AIReport.report_type == "crowd_analysis").order_by(AIReport.generated_at.desc()).first()
 
     return CrowdResponse(
-        overview=CrowdOverview(
-            total_occupancy=total_occupancy,
-            total_capacity=total_capacity,
-            avg_density=avg_density,
-            congestion_level=_status_label(avg_density / 100),
-        ),
+        overview=CrowdOverview(total_occupancy=total_occupancy, total_capacity=total_capacity, avg_density=avg_density, congestion_level=_status_label(avg_density / 100)),
         zones=zones,
-        queues=[
-            QueueInfo(location=z.zone, type="entry", wait_minutes=z.wait_time, trend="stable")
-            for z in zones[:5]
-        ],
+        queues=[QueueInfo(location=z.zone, type="entry", wait_minutes=z.wait_time, trend="stable") for z in zones[:5]],
         ai_summary=latest_report.summary if latest_report else "Live crowd data streaming. Current conditions vary by zone.",
     )
